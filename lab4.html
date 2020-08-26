@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+  <title>FAF</title>
+
+  <script id="vertex-shader" type="x-shader/x-vertex">
+
+attribute vec4 vPosition;
+attribute vec2 vTextureCoord; // texture coords were passed here from JS
+
+varying vec2 fTextureCoord; // texture coords that will be passed to fragment shader
+attribute vec4 vNormal;
+attribute vec4 vColor;
+varying vec4 fragColor;
+uniform vec3 theta;
+uniform float coeff;
+uniform vec3 trCoeff;
+
+uniform vec4 ambientProduct;
+uniform vec4 diffuseProduct0, specularProduct0;
+uniform vec4 diffuseProduct1, specularProduct1;
+uniform vec4 diffuseProduct2, specularProduct2;
+
+uniform vec4 lightPosition0;
+uniform vec4 lightPosition1;
+uniform vec4 lightPosition2;
+
+uniform float shininess;
+uniform mat4 modelView;
+uniform mat4 projection;
+
+void main()
+{
+    vec3 angles = radians(theta);
+    vec3 c = cos( angles );
+    vec3 s = sin( angles );
+
+    // Remeber: these matrices are column-major
+    mat4 rx = mat4( 1.0,  0.0,  0.0, 0.0,
+		    0.0,  c.x,  s.x, 0.0,
+		    0.0, -s.x,  c.x, 0.0,
+		    0.0,  0.0,  0.0, 1.0 );
+
+    mat4 ry = mat4( c.y, 0.0, -s.y, 0.0,
+		    0.0, 1.0,  0.0, 0.0,
+		    s.y, 0.0,  c.y, 0.0,
+		    0.0, 0.0,  0.0, 1.0 );
+
+    mat4 rz = mat4( c.z, s.z, 0.0, 0.0,
+		    -s.z,  c.z, 0.0, 0.0,
+		    0.0,  0.0, 1.0, 0.0,
+		    0.0,  0.0, 0.0, 1.0 );
+    
+    mat4 sc = mat4(
+        coeff, 0, 0, 0,
+        0, coeff, 0, 0,
+        0, 0, coeff, 0,
+        0, 0, 0, 1
+      );
+
+    mat4 tr = mat4(
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      trCoeff.x, trCoeff.y, trCoeff.z, 1
+  );
+
+  vec3 vertexPos = vPosition.xyz;
+
+  vec3 lightPos0 = lightPosition0.xyz;
+  vec3 lightPos1 = lightPosition1.xyz;
+  vec3 lightPos2 = lightPosition2.xyz;
+
+  vec3 lightVector0 = normalize(lightPos0 - vertexPos);
+  vec3 lightVector1 = normalize(lightPos1 - vertexPos);
+  vec3 lightVector2 = normalize(lightPos2 - vertexPos);
+
+  vec3 normalVector = normalize((projection * modelView * tr * rz * ry * rx * sc * vNormal).xyz);
+    
+        // the magic line!
+
+  float distance0 = length(lightPos0 - vertexPos);
+  float distance1 = length(lightPos1 - vertexPos);
+  float distance2 = length(lightPos2 - vertexPos);
+
+  float diffuseValue0 = max(dot(lightVector0, normalVector), 0.0) / distance0; 
+  float diffuseValue1 = max(dot(lightVector1, normalVector), 0.0) / distance1;
+  float diffuseValue2 = max(dot(lightVector2, normalVector), 0.0) / distance2; 
+
+
+  float specularValue0 = pow(max(dot(lightVector0, normalVector), 0.0), shininess); 
+  float specularValue1 = pow(max(dot(lightVector1, normalVector), 0.0), shininess); 
+  float specularValue2 = pow(max(dot(lightVector2, normalVector), 0.0), shininess); 
+
+    gl_Position = projection * modelView * tr * rz * ry * rx * sc * vPosition;
+    fragColor = diffuseProduct0 * diffuseValue0 + diffuseProduct1 * diffuseValue1 + diffuseProduct2 * diffuseValue2 +
+                specularValue0 * specularProduct0 + specularValue1 * specularProduct1 + specularValue2 * specularProduct2
+                + ambientProduct;
+    fTextureCoord = vTextureCoord;
+
+}
+</script>
+
+  <script id="fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 fragColor;
+uniform sampler2D textureData; // current texture number, passed from JS
+varying vec2 fTextureCoord;
+
+void
+main()
+{
+
+				vec4 colorFromTexture = texture2D(textureData, fTextureCoord); // getting the color for the pixel based on texture coordinates
+			    //gl_FragColor = colorFromTexture; // setting the color from the texture to the pixel
+
+
+			    // and example of color mixing, to combine the texture color with the values with the light colors
+				//vec4 someOtherColorForExampleSomeLightComponentFromLab3ThatYouWantToMixWithTextureColor = vec4(1.0, 0.0, 1.0, 1.0);
+			    gl_FragColor = colorFromTexture * 0.8 + fragColor * 0.2;
+
+}
+</script>
+  <script type="text/javascript" src="../Common/webgl-utils.js"></script>
+  <script type="text/javascript" src="../Common/initShaders.js"></script>
+  <script type="text/javascript" src="../Common/MV.js"></script>
+  <script type="text/javascript" src="lab4.js"></script>
+
+</head>
+</div>
+<canvas id="gl-canvas" width="720" height="500">
+  Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+</body>
+
+<form>
+  <select id="mySelect" onclick="updateSelectedShape()">
+    <option value="" selected data-default>select your shape</option>
+
+  </select>
+</form>
+<p> </p>
+
+<button id="addCube">Add a cube</button>
+<button id="addCone">Add a cone</button>
+<button id="addPyramid">Add a pyramid</button>
+<button id="deleteFigure">Delete selected figure</button>
+
+<button id="xButton">Rotate X</button>
+<button id="yButton">Rotate Y</button>
+<button id="zButton">Rotate Z</button>
+<button id="stopButton">Stop Rotation</button>
+<p> </p>
+
+Down - Up
+<input type="range" min="-1.5" max="2" value="0" step="0.01" id="UpDown">
+
+Left - Right
+<input type="range" min="-2" max="4" value="0" step="0.01" id="LeftRight">
+
+Further - Closer
+<input type="range" min="-1.5" max="4" value="0" step="0.01" id="CloserFurther">
+
+Scale
+<input type="range" min="0" max="10" value="1" step="0.01" id="Scale">
+
+<p> </p>
+<button id="IncreaseZ">Increase Z</button>
+<button id="DecreaseZ">Decrease Z</button>
+<button id="IncreaseR">Increase R</button>
+<button id="DecreaseR">Decrease R</button>
+
+<p> </p>
+
+Theta
+<input id="thetaSlider" type="range" min="-90" max="90" step="0.1" value="0" />
+
+phiSlider
+<input id="phiSlider" type="range" min="-90" max="90" step="0.1" value="0" />
+
+Fov
+<input id="fovSlider" type="range" min="10" max="120" step="0.1" value="45.0" />
+
+Aspect
+<input id="aspectSlider" type="range" min="0.5" max="2" step="0.1" value="1" />
+
+Center X
+<input id="atSliderX" type="range" min="-2" max="2" step="0.1" value="0" />
+Center Y
+<input id="atSliderY" type="range" min="-2" max="2" step="0.1" value="0" />
+Center Z
+<input id="atSliderZ" type="range" min="-2" max="2" step="0.1" value="0" />
+
+<h3>Light</h3>
+<select id="SelectedLight">
+  <option value="0">Light0</option>
+  <option value="1">Light1</option>
+  <option value="2" selected>Light2</option>
+</select>
+
+<p>
+  Light X
+  <input id="lightX" type="range" min="-100" max="40" step="1" value="0" />
+  Light Y
+  <input id="lightY" type="range" min="-30" max="30" step="1" value="0" />
+  Light Z
+  <input id="lightZ" type="range" min="-10" max="30" step="1" value="0" />
+</p>
+
+<p>
+  Ambient
+  <input id="ambient" type="color" name="favcolor" value="#333333">
+  Specular
+  <input id="specular" type="color" name="favcolor" value="#ff0000">
+  Diffuse
+  <input id="diffuse" type="color" name="favcolor" value="#ff0000">
+</p>
+
+<p>
+  Ambient Material
+  <input id="ambientMaterial" type="color" name="favcolor" value="#ff0000">
+  Specular Material
+  <input id="specularMaterial" type="color" name="favcolor" value="#ff0000">
+  Diffuse Material
+  <input id="diffuseMaterial" type="color" name="favcolor" value="#ff0000">
+  Shiness
+  <input id="shininess" type="range" min="0" max="20" step="0.1" value="0" />
+</p>
+<hr>
+Load OBJ
+<input type="file" id="file-input" style="font-size: 15px; " /><button id="load">Load obj</button>
+<br><br>
+Texture
+<input type="file" class="texture" style="font-size: 15px;" />
+
+</html>
